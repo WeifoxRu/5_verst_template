@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{PARK_NAME}} | 5 вёрст</title>
+    <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+    <style>
+        :root { --primary: #2B326D; --accent: #E6564C; --bg: #f5f5f5; }
+        body { font-family: -apple-system, system-ui, Helvetica Neue, Roboto, sans-serif; padding: 0; background: var(--bg); color: #333; margin: 0; padding-bottom: 80px; }
+        .tabs { display: flex; background: var(--primary); position: sticky; top: 0; z-index: 1000; padding: 5px; gap: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .tab { flex: 1; text-align: center; padding: 12px; font-weight: bold; color: #fff; opacity: 0.6; cursor: pointer; border-radius: 8px; font-size: 14px; }
+        .tab.active { opacity: 1; background: rgba(255,255,255,0.15); }
+        .card { background: white; padding: 16px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin: 15px; border: 1px solid #eef0f2; }
+        h2 { color: var(--primary); font-size: 18px; margin: 0 0 12px 0; border-bottom: 2px solid #f0f2ff; padding-bottom: 8px; }
+        .date-badge { color: var(--accent); }
+        .welcome-msg { background: #f0f2ff; padding: 12px; border-radius: 12px; font-size: 13px; margin-bottom: 15px; color: var(--primary); display: none; border: 1px solid #dce1e6; line-height: 1.6; }
+        .btn-qr { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 10px; font-size: 13px; font-weight: bold; margin-top: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; box-sizing: border-box; }
+        label { font-size: 11px; color: #999; margin-left: 4px; font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 4px; }
+        input, select, textarea { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #dce1e6; border-radius: 10px; box-sizing: border-box; font-size: 15px; outline: none; background: #f9fafb; -webkit-appearance: none; }
+       
+        .comment-box { display: none; margin-bottom: 15px; padding: 10px; background: #fff9f9; border-radius: 10px; border: 1px dashed var(--accent); }
+        .silent-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 15px 0;
+            font-size: 14px;
+            color: #555;
+            cursor: pointer;
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 10px;
+            border: 1px solid #ebedef;
+        }
+        .silent-box input[type="checkbox"] {
+            width: 22px;
+            height: 22px;
+            margin: 0;
+            cursor: pointer;
+            flex-shrink: 0;
+            -webkit-appearance: checkbox;
+        }
+        .silent-box.disabled { opacity: 0.5; color: #999; cursor: not-allowed; }
+
+        button#submit_btn { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; box-shadow: 0 4px 12px rgba(230, 86, 76, 0.2); }
+        button:disabled { background: #b0b0b0; box-shadow: none; }
+        .vol-card { background: white; padding: 10px 15px; border-radius: 12px; border: 1px solid #ebedef; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        .vol-info-group { display: flex; flex-direction: column; gap: 4px; }
+        .vol-role-badge { background: #f0f2ff; color: var(--primary); padding: 4px 8px; border-radius: 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; width: fit-content; }
+        .vol-name-txt { font-weight: 600; font-size: 14px; color: #333; }
+        .vol-comment-txt { font-size: 12px; color: #E6564C; font-style: italic; }
+        .btn-delete { background: #feebeb; color: #E6564C; border: 1px solid #ffdada; padding: 8px 12px; border-radius: 10px; font-size: 11px; font-weight: bold; cursor: pointer; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; flex-direction: column; padding: 20px; box-sizing: border-box; }
+        .modal-content { background: #ffffff !important; padding: 25px; border-radius: 24px; width: 100%; max-width: 320px; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.3); color: #333; text-align: center; }
+        .close-modal { margin-top: 20px; color: white; font-weight: bold; cursor: pointer; text-decoration: underline; font-size: 15px; }
+        .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .role-item-btn { background: #f8f9fa; border: 1px solid #eef0f2; padding: 15px 10px; border-radius: 12px; text-align: center; cursor: pointer; }
+        .role-item-btn img { width: 50px; height: 50px; margin-bottom: 8px; border-radius: 10px; object-fit: cover; }
+        .role-item-btn span { font-size: 11px; font-weight: bold; color: var(--primary); display: block; line-height: 1.2; }
+        .rating-item { display: flex; align-items: center; padding: 12px 5px; border-bottom: 1px solid #f0f2f5; }
+        .rank { width: 35px; font-weight: 900; color: var(--primary); font-size: 16px; opacity: 0.4; flex-shrink: 0; }
+        .user-info { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .user-name { font-weight: 700; font-size: 15px; color: #333; line-height: 1.2; }
+        .stats-row { display: flex; gap: 6px; flex-wrap: wrap; width: fit-content; }
+        .badge { font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 800; text-transform: uppercase; white-space: nowrap; color: #fff; display: flex; align-items: center; gap: 4px; width: auto; }
+        .run10 { background: #fecc3f; color: #333; } .run25 { background: #f29104; } .run50 { background: #e6464c; } .run100, .run250, .run500 { background: #8c1f28; }
+        .vol10 { background: #c9b4d8; color: #333; } .vol25 { background: #9d82aa; } .vol50 { background: #6c5391; } .vol100, .vol250, .vol500 { background: #422d58; }
+        .badge img { width: 12px; height: 12px; filter: brightness(0) saturate(100%) invert(100%); }
+        .run10 img, .vol10 img { filter: brightness(0) saturate(100%); }
+        .role-detail-img { width: 100%; height: auto; min-height: 150px; border-radius: 15px; margin-bottom: 15px; border: 1px solid #eee; object-fit: cover; background: #fafafa; display: block; }
+        .qr-code-img { width: 220px; height: 220px; margin: 10px auto; display: block; background: #fff; }
+        .fab-help { position: fixed; bottom: 20px; right: 20px; width: 56px; height: 56px; background: var(--primary); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 1500; cursor: pointer; border: 2px solid white; }
+        #search_results, #rate_results { background: white; border: 1px solid #dce1e6; border-radius: 12px; max-height: 200px; overflow-y: auto; display: none; position: absolute; width: 100%; z-index: 1000; top: 52px; }
+        .selected-friend { background: #f0f2ff; padding: 12px; border-radius: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 12px; border: 1px solid #dce1e6; }
+        .selected-friend img { width: 40px; height: 40px; border-radius: 50%; }
+        .change-friend-btn { background: #ebedef; color: #2B326D; border: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+
+        /* Мультивыбор стили */
+        .roles-container { border: 1px solid #dce1e6; border-radius: 12px; padding: 5px; max-height: 280px; overflow-y: auto; background: #f9fafb; margin-bottom: 15px; }
+        .role-option { display: flex; align-items: center; padding: 10px; border-bottom: 1px solid #ebedef; cursor: pointer; }
+        .role-option:last-child { border-bottom: none; }
+        .role-option input[type="checkbox"] { width: 22px; height: 22px; margin-right: 12px; -webkit-appearance: checkbox; cursor: pointer; }
+        .role-option span { font-size: 14px; color: #333; flex: 1; }
+        .role-option.selected { background: #f0f2ff; }
+        .group-label { background: #eee; font-size: 10px; font-weight: 800; padding: 4px 10px; color: #666; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+<div class="fab-help" onclick="openModal('modal_help')">?</div>
+<div id="modal_help" class="modal" onclick="closeModal('modal_help')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="border:none; text-align:center; margin-bottom: 15px;">Глоссарий</h2>
+        <button class="btn-qr" onclick="openModal('modal_roles')">📖 Описание ролей</button>
+        <button class="btn-qr" onclick="openModal('modal_guide')">📱 Гайд по приложению</button>
+        <button class="btn-qr" onclick="openModal('modal_about')">🌳 О нас</button>
+        <button class="btn-qr" onclick="window.open('{{VK_COMMUNITY_URL}}')">🌐 Наши соцсети</button>
+        <div style="text-align:center; margin-top:20px; font-size:11px; color:#999;">Версия 1.5</div>
+    </div>
+    <div class="close-modal">Закрыть</div>
+</div>
+<div id="modal_roles" class="modal" onclick="closeModal('modal_roles')">
+    <div class="modal-content" onclick="event.stopPropagation()" style="max-width:350px;">
+        <h2 style="border:none;">Ключевые роли</h2>
+        <div class="role-grid">
+            <div class="role-item-btn" onclick="showRoleDetail(1, 'Организатор', 'Главный человек на старте. Координирует волонтеров, проводит брифинг и следит за безопасностью.')">
+                <img src="{{GITHUB_IMG_BASE}}role_1.jpg" onerror="this.src='https://via.placeholder.com/100?text=Role'"><span>Организатор</span>
+            </div>
+            <div class="role-item-btn" onclick="showRoleDetail(2, 'Секундомер', 'Нажимает кнопку СТАРТ и фиксирует время каждого финишера. Самая ответственная роль!')">
+                <img src="{{GITHUB_IMG_BASE}}role_2.jpg" onerror="this.src='https://via.placeholder.com/100?text=Role'"><span>Секундомер</span>
+            </div>
+            <div class="role-item-btn" onclick="showRoleDetail(11, 'Сканер', 'Сканирует личный штрих-код участника и карточку позиции после финиша.')">
+                <img src="{{GITHUB_IMG_BASE}}role_11.jpg" onerror="this.src='https://via.placeholder.com/100?text=Role'"><span>Сканер</span>
+            </div>
+            <div class="role-item-btn" onclick="showRoleDetail(13, 'Карточки', 'Выдает карточку с номером позиции каждому, кто пересек финишную черту.')">
+                <img src="{{GITHUB_IMG_BASE}}role_13.jpg" onerror="this.src='https://via.placeholder.com/100?text=Role'"><span>Карточки</span>
+            </div>
+            <div class="role-item-btn" onclick="showRoleDetail(7, 'Маршал', 'Стоит на ключевых поворотах, указывает путь и подбадривает участников.')">
+                <img src="{{GITHUB_IMG_BASE}}role_7.jpg" onerror="this.src='https://via.placeholder.com/100?text=Role'"><span>Маршал</span>
+            </div>
+            <div class="role-item-btn" onclick="showRoleDetail(19, 'Замыкающий', 'Идет последним, чтобы никто не остался на трассе один. Финиширует в самом конце.')">
+                <img src="{{GITHUB_IMG_BASE}}role_19.jpg" onerror="this.src='https://via.placeholder.com/100?text=Role'"><span>Замыкающий</span>
+            </div>
+        </div>
+    </div>
+    <div class="close-modal">Назад</div>
+</div>
+<div id="modal_role_detail" class="modal" onclick="closeModal('modal_role_detail')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <img id="role_img" class="role-detail-img" src="">
+        <h2 id="role_title" style="color:var(--primary); margin:0 0 10px 0; border:none;"></h2>
+        <div id="role_desc" style="font-size:14px; line-height:1.5; color:#555;"></div>
+    </div>
+    <div class="close-modal">Назад</div>
+</div>
+<div id="modal_guide" class="modal" onclick="closeModal('modal_guide')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="border:none;">Как пользоваться?</h2>
+        <div style="font-size:14px; line-height:1.5; color:#555;">
+            1. 🔍 <b>Поиск</b>: Введи фамилию или ID 5 вёрст в окне записи.<br><br>
+            2. ✅ <b>Выбор</b>: Выбери одну или несколько ролей из списка.<br><br>
+            3. 🧡 <b>Рейтинг</b>: Записывайся чаще, чтобы получать бейджи клубов!<br><br>
+            4. 📲 <b>Карточка</b>: Найди себя в рейтинге, чтобы сохранить личную QR-карту участника.
+        </div>
+    </div>
+    <div class="close-modal">Назад</div>
+</div>
+<div id="modal_about" class="modal" onclick="closeModal('modal_about')">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="border:none;">{{PARK_NAME}}</h2>
+        <div style="font-size:14px; line-height:1.5; color:#555;">
+            Бесплатные еженедельные старты в локации {{PARK_NAME}} каждую субботу в 09:00.<br><br>
+            Разработано для сообщества "{{PARK_NAME}}".
+        </div>
+    </div>
+    <div class="close-modal">Назад</div>
+</div>
+<div id="qr_modal" class="modal" onclick="closeQR()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h3 style="color:var(--primary); margin:0 0 15px 0;">Личная карточка</h3>
+        <div id="qr_img_box">
+             <div style="padding:40px; color:#999;">Загрузка кода...</div>
+        </div>
+        <p id="qr_id_text" style="color:var(--accent); margin:15px 0 0 0; font-weight:900; font-size:26px;"></p>
+        <span id="qr_name_text" style="color:#666; font-size:14px; display:block; margin-top:8px; font-weight:500;"></span>
+    </div>
+    <div class="close-modal">Закрыть</div>
+</div>
+<div class="tabs">
+    <div id="tab_rec" class="tab active" onclick="switchTab('rec')">ЗАПИСЬ</div>
+    <div id="tab_rate" class="tab" onclick="switchTab('rate')">РЕЙТИНГ</div>
+</div>
+<div id="section_rec">
+    <div class="card" style="border: 2px dashed var(--accent); background: #fffcfc;">
+        <label>Тематика старта (видят все):</label>
+        <textarea id="theme_input" rows="3" placeholder="Например: 21 марта - Всемирный день поэзии..."></textarea>
+        <button class="btn-qr" style="margin-top:0; height:36px; font-size:12px; background:var(--primary);" onclick="saveTheme()">Сохранить тему</button>
+    </div>
+
+    <div class="card">
+        <h2>Запись на <span id="event_date" class="date-badge">...</span></h2>
+        <div style="background:linear-gradient(90deg, #2B326D, #4f5ca8); color:white; padding:14px 16px; border-radius:12px; margin:12px 0 18px 0; text-align:center; font-weight:700; font-size:16px; box-shadow:0 3px 10px rgba(43,50,109,0.3);">
+            📍 <span id="park_name">{{PARK_NAME}}</span>
+        </div>
+        
+        <div id="welcome_back" class="welcome-msg"></div>
+        <label>1. Кто пойдет волонтерить (5 вёрст):</label>
+        <div style="position:relative">
+            <input type="text" id="verst_search" placeholder="Фамилия или ID 5 вёрст..." autocomplete="off">
+            <div id="search_results"></div>
+        </div>
+        <label>2. Чей профиль VK привязать:</label>
+        <select id="vk_id_mode" onchange="toggleFriendVk()">
+            <option value="me">Мой профиль</option>
+            <option value="friend">Другой человек</option>
+        </select>
+       
+        <div id="friend_vk_container" style="display:none;">
+            <div id="selected_friend_display" style="display:none;" class="selected-friend">
+                <img id="selected_friend_photo" src="">
+                <div style="flex:1;">
+                    <div id="selected_friend_name" style="font-weight:600;"></div>
+                    <div id="selected_friend_id" style="font-size:12px; color:#666;"></div>
+                </div>
+                <button class="change-friend-btn" onclick="selectAnotherFriend()">Выбрать другого</button>
+            </div>
+            <button id="choose_friend_btn" class="btn-qr" onclick="selectFriendFromVK()" style="margin-top:8px;">Выбрать друга из ВК</button>
+            <input type="hidden" id="selected_vk_id">
+            <input type="hidden" id="selected_vk_name">
+        </div>
+        
+        <label>3. Позиции волонтера (выберите одну или несколько):</label>
+        <div class="roles-container" id="roles_checkbox_list">
+            <div class="group-label">Основные позиции</div>
+            <div class="role-option" data-id="1" data-name="Организатор"><input type="checkbox"> <span>Организатор</span></div>
+            <div class="role-option" data-id="2" data-name="Секундомер"><input type="checkbox"> <span>Секундомер</span></div>
+            <div class="role-option" data-id="5" data-name="Фотограф"><input type="checkbox"> <span>Фотограф</span></div>
+            <div class="role-option" data-id="7" data-name="Маршал"><input type="checkbox"> <span>Маршал</span></div>
+            <div class="role-option" data-id="11" data-name="Сканирование штрих-кодов"><input type="checkbox"> <span>Сканирование штрих-кодов</span></div>
+            <div class="role-option" data-id="13" data-name="Раздача карточек позиций"><input type="checkbox"> <span>Раздача карточек позиций</span></div>
+            <div class="role-option" data-id="19" data-name="Замыкающий"><input type="checkbox"> <span>Замыкающий</span></div>
+            
+            <div class="group-label">Уникальные позиции</div>
+            <div class="role-option" data-id="1001" data-name="Чай"><input type="checkbox"> <span>Чай</span></div>
+            <div class="role-option" data-id="1002" data-name="Вкусняшки"><input type="checkbox"> <span>Вкусняшки</span></div>
+            <div class="role-option" data-id="1003" data-name="Вода"><input type="checkbox"> <span>Вода</span></div>
+            <div class="role-option" data-id="1004" data-name="Поддержка на трассе"><input type="checkbox"> <span>Поддержка на трассе</span></div>
+            <div class="role-option" data-id="8" data-name="Подготовка мероприятия"><input type="checkbox"> <span>Подготовка мероприятия</span></div>
+            
+            <div class="group-label">Дополнительные позиции</div>
+            <div class="role-option" data-id="3" data-name="Сортировка карточек"><input type="checkbox"> <span>Сортировка карточек</span></div>
+            <div class="role-option" data-id="4" data-name="Обработка результатов"><input type="checkbox"> <span>Обработка результатов</span></div>
+            <div class="role-option" data-id="6" data-name="Связи с общественностью"><input type="checkbox"> <span>Связи с общественностью</span></div>
+            <div class="role-option" data-id="9" data-name="Хранение и доставка оборудования"><input type="checkbox"> <span>Хранение и доставка оборудования</span></div>
+            <div class="role-option" data-id="10" data-name="Разное"><input type="checkbox"> <span>Разное</span></div>
+            <div class="role-option" data-id="12" data-name="Завершение мероприятия"><input type="checkbox"> <span>Завершение мероприятия</span></div>
+            <div class="role-option" data-id="14" data-name="Проверка карточек позиций"><input type="checkbox"> <span>Проверка карточек позиций</span></div>
+            <div class="role-option" data-id="15" data-name="Инструктаж новых участников"><input type="checkbox"> <span>Инструктаж новых участников</span></div>
+            <div class="role-option" data-id="16" data-name="Организация финиша"><input type="checkbox"> <span>Организация финиша</span></div>
+            <div class="role-option" data-id="17" data-name="Ведущий велосипед"><input type="checkbox"> <span>Ведущий велосипед</span></div>
+            <div class="role-option" data-id="18" data-name="Помощь в раздаче карточек позиций"><input type="checkbox"> <span>Помощь в раздаче карточек позиций</span></div>
+            <div class="role-option" data-id="20" data-name="Координация волонтёров"><input type="checkbox"> <span>Координация волонтёров</span></div>
+            <div class="role-option" data-id="23" data-name="Составление отчёта"><input type="checkbox"> <span>Составление отчёта</span></div>
+            <div class="role-option" data-id="28" data-name="Пейсмейкер"><input type="checkbox"> <span>Пейсмейкер</span></div>
+            <div class="role-option" data-id="30" data-name="Лидер для слабовидящих"><input type="checkbox"> <span>Лидер для слабовидящих</span></div>
+            <div class="role-option" data-id="31" data-name="Проведение разминки"><input type="checkbox"> <span>Проведение разминки</span></div>
+            <div class="role-option" data-id="32" data-name="Сурдопереводчик"><input type="checkbox"> <span>Сурдопереводчик</span></div>
+            <div class="role-option" data-id="33" data-name="Координатор парковки"><input type="checkbox"> <span>Координатор парковки</span></div>
+            <div class="role-option" data-id="34" data-name="Проверка трассы"><input type="checkbox"> <span>Проверка трассы</span></div>
+            <div class="role-option" data-id="35" data-name="Разметка трассы"><input type="checkbox"> <span>Разметка трассы</span></div>
+            <div class="role-option" data-id="36" data-name="Ведущий мероприятия"><input type="checkbox"> <span>Ведущий мероприятия</span></div>
+            <div class="role-option" data-id="37" data-name="Проведение предстартового брифинга"><input type="checkbox"> <span>Проведение предстартового брифинга</span></div>
+            <div class="role-option" data-id="38" data-name="Видеограф"><input type="checkbox"> <span>Видеограф</span></div>
+        </div>
+
+        <div id="marshal_container" style="display:none;">
+            <label>Где будет стоять Маршал?</label>
+            <select id="marshal_select" onchange="handleMarshalSelect()">
+                <option value="custom">Свой вариант...</option>
+            </select>
+        </div>
+
+        <div id="pace_container" style="display:none;">
+            <label>Выберите темп:</label>
+            <select id="pace_select" onchange="handlePaceSelect()">
+                <option value="4'30''">4'30''</option>
+                <option value="5'00''">5'00''</option>
+                <option value="5'30''">5'30''</option>
+                <option value="6'00''">6'00''</option>
+                <option value="6'30''">6'30''</option>
+                <option value="7'00''">7'00''</option>
+                <option value="7'30''">7'30''</option>
+                <option value="8'00''">8'00''</option>
+                <option value="custom">Ввести вручную...</option>
+            </select>
+        </div>
+
+        <div id="comment_container" class="comment-box">
+            <label id="comment_label">Уточнение (необязательно):</label>
+            <input type="text" id="role_comment" placeholder="...">
+        </div>
+
+        <label class="silent-box" id="silent_label">
+            <input type="checkbox" id="silent_mode"> Не пинговать чат (тихая запись)
+        </label>
+        <button id="submit_btn" onclick="sendData()" disabled>Записаться</button>
+    </div>
+    <div style="margin-left:20px; font-weight:bold; color:var(--primary); font-size:13px; text-transform:uppercase;">Уже в списке:</div>
+    <div id="queue_container" style="padding:10px 15px;"></div>
+</div>
+<div id="section_rate" style="display:none">
+    <div class="card">
+        <h2>Поиск участника</h2>
+        <label>Найди себя, чтобы привязать профиль:</label>
+        <div style="position:relative">
+            <input type="text" id="rate_search" placeholder="Фамилия или ID..." autocomplete="off">
+            <div id="search_results"></div>
+        </div>
+    </div>
+    <div class="card">
+        <h2>Клубный рейтинг участников</h2>
+        <div id="rating_list">Загрузка рейтинга...</div>
+    </div>
+</div>
+<script>
+    vkBridge.send("VKWebAppInit");
+    const SCRIPT_URL = '{{SCRIPT_URL}}';
+    const GITHUB_IMG_BASE = '{{GITHUB_IMG_BASE}}';
+    let selectedVolunteer = null;
+    let vkUser = null;
+    let currentSelectedFriend = null;
+
+    const runIcon = `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M13.49 5.42c1.23 0 2.22-1 2.22-2.22A2.22 2.22 0 0 0 13.5 1a2.22 2.22 0 0 0-2.23 2.22c0 1.22.99 2.2 2.22 2.2M10.34 11l-2.1-1.03c-.34-.17-.55-.52-.55-.91 0-.74.79-1.22 1.45-.91l4.83 2.3c.53.25.87.78.87 1.37V17h-2v-4.43l-1.74-.83V23h-2v-6.95l.45-1.5L7.2 13c-.34-.16-.55-.52-.55-.9 0-.75.8-1.23 1.46-.9l2.23 1.03V11z'/%3E%3C/svg%3E" />`;
+    const volIcon = "🧡 ";
+
+    function switchTab(t) {
+        document.getElementById('section_rec').style.display = t === 'rec' ? 'block' : 'none';
+        document.getElementById('section_rate').style.display = t === 'rate' ? 'block' : 'none';
+        document.getElementById('tab_rec').classList.toggle('active', t === 'rec');
+        document.getElementById('tab_rate').classList.toggle('active', t === 'rate');
+        if (t === 'rate') loadRating();
+    }
+
+    function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function showRoleDetail(id, title, desc) {
+        const img = document.getElementById('role_img');
+        img.src = `${GITHUB_IMG_BASE}role_${id}.jpg`;
+        document.getElementById('role_title').innerText = title;
+        document.getElementById('role_desc').innerText = desc;
+        openModal('modal_role_detail');
+    }
+
+    function showQR(id, name) {
+        const qrBox = document.getElementById('qr_img_box');
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=A${id}`;
+        qrBox.innerHTML = '<div style="padding:40px; color:#999;">Генерация QR...</div>';
+        document.getElementById('qr_id_text').innerText = `A${id}`;
+        document.getElementById('qr_name_text').innerText = name.toUpperCase();
+        openModal('qr_modal');
+        const img = new Image();
+        img.onload = () => { qrBox.innerHTML = ''; img.className = 'qr-code-img'; img.style.width = '200px'; img.style.height = '200px'; qrBox.appendChild(img); };
+        img.src = qrUrl;
+    }
+
+    function closeQR() { closeModal('qr_modal'); }
+
+    async function init() {
+        try {
+            vkUser = await vkBridge.send("VKWebAppGetUserInfo");
+            const themeRes = await fetch(`${SCRIPT_URL}?get_theme=1`);
+            const themeData = await themeRes.json();
+            document.getElementById('theme_input').value = themeData.theme || "";
+
+            const res = await fetch(`${SCRIPT_URL}?check_vk_id=${vkUser.id}`);
+            const data = await res.json();
+            if (data.found) {
+                selectedVolunteer = { id: data.verst_id, full_name: data.full_name };
+                document.getElementById('verst_search').value = data.full_name;
+                const welcome = document.getElementById('welcome_back');
+                welcome.style.display = 'block';
+                let badgesHtml = "";
+                if (data.stats) {
+                    const rB = data.stats.run_club ? `<span class="badge ${data.stats.run_club}">${runIcon} ${data.stats.run_club.replace('run','')}</span>` : '';
+                    const vB = data.stats.vol_club ? `<span class="badge ${data.stats.vol_club}">${volIcon} ${data.stats.vol_club.replace('vol','')}</span>` : '';
+                    if (rB || vB) badgesHtml = `<div class="stats-row">${rB} ${vB}</div>`;
+                }
+                welcome.innerHTML = `👋 <b>${vkUser.first_name}</b>, твои данные подставлены!<br>${badgesHtml}<button class="btn-qr" onclick="showQR('${data.verst_id}', '${data.full_name}')">МОЯ КАРТОЧКА УЧАСТНИКА</button>`;
+            }
+            const dRes = await fetch(SCRIPT_URL + "?get_date=1");
+            const dData = await dRes.json();
+            document.getElementById('event_date').innerText = dData.date;
+            await loadQueue();
+            validateForm();
+        } catch (e) { console.error(e); }
+    }
+    init();
+
+    document.querySelectorAll('.role-option').forEach(item => {
+        item.onclick = function(e) {
+            const cb = this.querySelector('input');
+            if (e.target !== cb) cb.checked = !cb.checked;
+            this.classList.toggle('selected', cb.checked);
+            handleRoleChange();
+        };
+    });
+
+    function handleRoleChange() {
+        const checked = Array.from(document.querySelectorAll('.role-option input:checked')).map(i => i.parentElement.dataset.id);
+        const marshalCont = document.getElementById('marshal_container');
+        const paceCont = document.getElementById('pace_container');
+        const commentBox = document.getElementById('comment_container');
+        const silentBox = document.getElementById('silent_mode');
+        const silentLabel = document.getElementById('silent_label');
+
+        const keyRoles = ["1", "7", "11", "2", "15", "9", "13", "19"];
+        const hasKeyRole = checked.some(id => keyRoles.includes(id));
+
+        if (hasKeyRole) {
+            silentBox.checked = false;
+            silentBox.disabled = true;
+            silentLabel.classList.add('disabled');
+        } else {
+            silentBox.disabled = false;
+            silentLabel.classList.remove('disabled');
+        }
+
+        marshalCont.style.display = checked.includes("7") ? 'block' : 'none';
+        paceCont.style.display = checked.includes("28") ? 'block' : 'none';
+        
+        const needsComment = checked.some(id => ["8", "9", "35", "1001", "1002", "1003"].includes(id));
+        if (needsComment || (checked.includes("7") && document.getElementById('marshal_select').value === 'custom') || (checked.includes("28") && document.getElementById('pace_select').value === 'custom')) {
+            commentBox.style.display = 'block';
+        } else {
+            commentBox.style.display = 'none';
+        }
+        validateForm();
+    }
+
+    async function saveTheme() {
+        const text = document.getElementById('theme_input').value;
+        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: "set_theme", theme: text }) });
+        alert("Тема сохранена!");
+    }
+
+    function toggleFriendVk() {
+        const mode = document.getElementById('vk_id_mode').value;
+        const container = document.getElementById('friend_vk_container');
+        if (mode === 'friend') {
+            container.style.display = 'block';
+        } else {
+            container.style.display = 'none';
+            document.getElementById('selected_vk_id').value = "";
+        }
+        validateForm();
+    }
+
+    async function selectFriendFromVK() {
+        try {
+            const data = await vkBridge.send("VKWebAppGetFriends", { multi: false });
+            if (data.users && data.users.length > 0) {
+                const friend = data.users[0];
+                document.getElementById('selected_vk_id').value = friend.id;
+                document.getElementById('selected_vk_name').value = friend.first_name + " " + friend.last_name;
+                document.getElementById('selected_friend_photo').src = friend.photo_100;
+                document.getElementById('selected_friend_name').innerText = friend.first_name + " " + friend.last_name;
+                document.getElementById('selected_friend_id').innerText = "ID: " + friend.id;
+                document.getElementById('selected_friend_display').style.display = 'flex';
+                document.getElementById('choose_friend_btn').style.display = 'none';
+                validateForm();
+            }
+        } catch (e) {}
+    }
+
+    function selectAnotherFriend() {
+        document.getElementById('selected_friend_display').style.display = 'none';
+        document.getElementById('choose_friend_btn').style.display = 'block';
+        document.getElementById('selected_vk_id').value = "";
+        validateForm();
+    }
+
+    function handleMarshalSelect() { handleRoleChange(); }
+    function handlePaceSelect() { handleRoleChange(); }
+
+    async function searchHandler(query, resultBox, isRecord) {
+        if (query.length < 3) { resultBox.style.display = 'none'; return; }
+        resultBox.innerHTML = '<div style="padding:15px">Ищем...</div>';
+        resultBox.style.display = 'block';
+        try {
+            const res = await fetch(`${SCRIPT_URL}?search=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            resultBox.innerHTML = '';
+            (data.result?.data || []).forEach(v => {
+                const div = document.createElement('div');
+                div.style = "padding:12px; border-bottom:1px solid #f0f0f0; cursor:pointer;";
+                div.innerHTML = `<b>${v.full_name}</b><br><small>ID: ${v.id}</small>`;
+                div.onclick = async () => {
+                    if (isRecord) {
+                        selectedVolunteer = v;
+                        document.getElementById('verst_search').value = v.full_name;
+                        resultBox.style.display = 'none';
+                        validateForm();
+                    }
+                };
+                div.appendChild(div);
+            });
+        } catch (e) { resultBox.innerHTML = 'Ошибка'; }
+    }
+
+    document.getElementById('verst_search').addEventListener('input', (e) => {
+        clearTimeout(window.searchTimeout);
+        window.searchTimeout = setTimeout(() => searchHandler(e.target.value.trim(), document.getElementById('search_results'), true), 500);
+    });
+
+    document.getElementById('rate_search').addEventListener('input', (e) => {
+        clearTimeout(window.rateTimeout);
+        window.rateTimeout = setTimeout(() => searchHandler(e.target.value.trim(), document.getElementById('rate_results'), false), 500);
+    });
+
+    function validateForm() {
+        const anyChecked = document.querySelectorAll('.role-option input:checked').length > 0;
+        const mode = document.getElementById('vk_id_mode').value;
+        const vkOk = (mode === 'me' || (mode === 'friend' && document.getElementById('selected_vk_id').value));
+        document.getElementById('submit_btn').disabled = !(selectedVolunteer && anyChecked && vkOk);
+    }
+
+    async function sendData() {
+        const btn = document.getElementById('submit_btn');
+        btn.innerText = "Записываем..."; btn.disabled = true;
+
+        const roles = Array.from(document.querySelectorAll('.role-option input:checked')).map(cb => {
+            const item = cb.parentElement;
+            const rid = item.dataset.id;
+            let comment = document.getElementById('role_comment').value;
+            if (rid == "7") {
+                const m = document.getElementById('marshal_select').value;
+                comment = (m === 'custom' ? comment : m);
+            } else if (rid == "28") {
+                const p = document.getElementById('pace_select').value;
+                comment = (p === 'custom' ? comment : p);
+            }
+            return { id: rid, name: item.dataset.name, comment: comment };
+        });
+
+        const payload = {
+            verst_id: selectedVolunteer.id,
+            full_name: selectedVolunteer.full_name,
+            roles: roles,
+            author_vk_id: vkUser.id,
+            target_vk_id: document.getElementById('vk_id_mode').value === 'me' ? vkUser.id : document.getElementById('selected_vk_id').value,
+            target_vk_name: document.getElementById('vk_id_mode').value === 'me' ? (vkUser.first_name + " " + vkUser.last_name) : document.getElementById('selected_vk_name').value,
+            silent: document.getElementById('silent_mode').checked
+        };
+
+        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        location.reload();
+    }
+
+    async function loadRating() {
+        const container = document.getElementById('rating_list');
+        container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">Загрузка рейтинга...</div>';
+        try {
+            const res = await fetch(`${SCRIPT_URL}?get_rating=1`);
+            const data = await res.json();
+            data.sort((a,b) => ((b.runs||0) + (b.vols||0)) - ((a.runs||0) + (a.vols||0)));
+            container.innerHTML = '';
+            data.forEach((u, i) => {
+                const item = document.createElement('div');
+                item.className = 'rating-item';
+                const rBadge = u.run_club ? `<span class="badge ${u.run_club}">${runIcon} ${u.run_club.replace('run','')}</span>` : '';
+                const vBadge = u.vol_club ? `<span class="badge ${u.vol_club}">${volIcon} ${u.vol_club.replace('vol','')}</span>` : '';
+                item.innerHTML = `<div class="rank">${i+1}</div><div class="user-info"><div class="user-name">${u.name}</div><div class="stats-row">${rBadge} ${vBadge}</div></div>`;
+                container.appendChild(item);
+            });
+        } catch (e) { container.innerHTML = 'Ошибка'; }
+    }
+
+    async function loadQueue() {
+        const res = await fetch(SCRIPT_URL);
+        const data = await res.json();
+        const container = document.getElementById('queue_container');
+        container.innerHTML = '';
+        if(data.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">Пока никто не записался</div>';
+            return;
+        }
+        data.reverse().forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'vol-card';
+            const isMine = vkUser && (item.author_vk_id == vkUser.id || item.vk_id == vkUser.id);
+            div.innerHTML = `
+                <div class="vol-info-group">
+                    <span class="vol-name-txt">${item.full_name} ${item.comment ? '('+item.comment+')' : ''}</span>
+                    <span class="vol-role-badge">${item.role_name}</span>
+                </div>
+                ${isMine ? `<button class="btn-delete" onclick="deleteMyRole('${item.role_id}', '${item.role_name}', '${item.full_name}')">Отмена</button>` : ''}
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    async function deleteMyRole(rid, rname, fname) {
+        if (confirm(`Отменить запись ${fname}?`)) {
+            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: "delete", vk_id: vkUser.id, role_id: rid, role_name: rname, person_name: fname }) });
+            location.reload();
+        }
+    }
+</script>
+</body>
+</html>
