@@ -95,7 +95,7 @@
         <button class="btn-qr" onclick="openModal('modal_guide')">📱 Гайд по приложению</button>
         <button class="btn-qr" onclick="openModal('modal_about')">🌳 О нас</button>
         <button class="btn-qr" onclick="window.open('{{VK_COMMUNITY_URL}}')">🌐 Наши соцсети</button>
-        <div style="text-align:center; margin-top:20px; font-size:11px; color:#999;">Версия 1.5</div>
+        <div style="text-align:center; margin-top:20px; font-size:11px; color:#999;">Универсальная версия 2.0</div>
     </div>
     <div class="close-modal">Закрыть</div>
 </div>
@@ -171,6 +171,7 @@
     <div id="tab_rate" class="tab" onclick="switchTab('rate')">РЕЙТИНГ</div>
 </div>
 <div id="section_rec">
+    <!-- ТЕМАТИКА СТАРТА -->
     <div class="card" style="border: 2px dashed var(--accent); background: #fffcfc;">
         <label>Тематика старта (видят все):</label>
         <textarea id="theme_input" rows="3" placeholder="Например: 21 марта - Всемирный день поэзии..."></textarea>
@@ -253,6 +254,7 @@
             <div class="role-option" data-id="38" data-name="Видеограф"><input type="checkbox"> <span>Видеограф</span></div>
         </div>
 
+        <!-- ВЫБОР ТОЧКИ МАРШАЛА -->
         <div id="marshal_container" style="display:none;">
             <label>Где будет стоять Маршал?</label>
             <select id="marshal_select" onchange="handleMarshalSelect()">
@@ -260,6 +262,7 @@
             </select>
         </div>
 
+        <!-- ВЫБОР ТЕМПА ПЕЙСМЕЙКЕРА -->
         <div id="pace_container" style="display:none;">
             <label>Выберите темп:</label>
             <select id="pace_select" onchange="handlePaceSelect()">
@@ -294,7 +297,7 @@
         <label>Найди себя, чтобы привязать профиль:</label>
         <div style="position:relative">
             <input type="text" id="rate_search" placeholder="Фамилия или ID..." autocomplete="off">
-            <div id="search_results"></div>
+            <div id="rate_results"></div>
         </div>
     </div>
     <div class="card">
@@ -304,14 +307,24 @@
 </div>
 <script>
     vkBridge.send("VKWebAppInit");
+    
+    // ЭТИ МЕТКИ БУДУТ ЗАМЕНЕНЫ ФАБРИКОЙ
     const SCRIPT_URL = '{{SCRIPT_URL}}';
     const GITHUB_IMG_BASE = '{{GITHUB_IMG_BASE}}';
+
     let selectedVolunteer = null;
     let vkUser = null;
     let currentSelectedFriend = null;
 
     const runIcon = `<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M13.49 5.42c1.23 0 2.22-1 2.22-2.22A2.22 2.22 0 0 0 13.5 1a2.22 2.22 0 0 0-2.23 2.22c0 1.22.99 2.2 2.22 2.2M10.34 11l-2.1-1.03c-.34-.17-.55-.52-.55-.91 0-.74.79-1.22 1.45-.91l4.83 2.3c.53.25.87.78.87 1.37V17h-2v-4.43l-1.74-.83V23h-2v-6.95l.45-1.5L7.2 13c-.34-.16-.55-.52-.55-.9 0-.75.8-1.23 1.46-.9l2.23 1.03V11z'/%3E%3C/svg%3E" />`;
     const volIcon = "🧡 ";
+
+    // Умная функция склейки URL
+    function getFullUrl(params = '') {
+        if (!params) return SCRIPT_URL;
+        const separator = SCRIPT_URL.includes('?') ? '&' : '?';
+        return `${SCRIPT_URL}${separator}${params}`;
+    }
 
     function switchTab(t) {
         document.getElementById('section_rec').style.display = t === 'rec' ? 'block' : 'none';
@@ -349,29 +362,35 @@
     async function init() {
         try {
             vkUser = await vkBridge.send("VKWebAppGetUserInfo");
-            const themeRes = await fetch(`${SCRIPT_URL}?get_theme=1`);
+
+            // 1. Загружаем базовые данные (Дату, Название парка, Очередь)
+            const res = await fetch(getFullUrl());
+            const data = await res.json();
+            
+            if (data.error) {
+                alert("Ошибка бэкенда: " + data.error);
+                return;
+            }
+
+            document.getElementById('park_name').innerText = data.park_name;
+            document.getElementById('event_date').innerText = data.date;
+            renderQueue(data.queue);
+
+            // 2. Загружаем тему
+            const themeRes = await fetch(getFullUrl('get_theme=1'));
             const themeData = await themeRes.json();
             document.getElementById('theme_input').value = themeData.theme || "";
 
-            const res = await fetch(`${SCRIPT_URL}?check_vk_id=${vkUser.id}`);
-            const data = await res.json();
-            if (data.found) {
-                selectedVolunteer = { id: data.verst_id, full_name: data.full_name };
-                document.getElementById('verst_search').value = data.full_name;
+            // 3. Проверка привязки VK профиля
+            const checkRes = await fetch(getFullUrl('check_vk_id=' + vkUser.id));
+            const checkData = await checkRes.json();
+            if (checkData.found) {
+                selectedVolunteer = { id: checkData.verst_id, full_name: checkData.full_name };
+                document.getElementById('verst_search').value = checkData.full_name;
                 const welcome = document.getElementById('welcome_back');
                 welcome.style.display = 'block';
-                let badgesHtml = "";
-                if (data.stats) {
-                    const rB = data.stats.run_club ? `<span class="badge ${data.stats.run_club}">${runIcon} ${data.stats.run_club.replace('run','')}</span>` : '';
-                    const vB = data.stats.vol_club ? `<span class="badge ${data.stats.vol_club}">${volIcon} ${data.stats.vol_club.replace('vol','')}</span>` : '';
-                    if (rB || vB) badgesHtml = `<div class="stats-row">${rB} ${vB}</div>`;
-                }
-                welcome.innerHTML = `👋 <b>${vkUser.first_name}</b>, твои данные подставлены!<br>${badgesHtml}<button class="btn-qr" onclick="showQR('${data.verst_id}', '${data.full_name}')">МОЯ КАРТОЧКА УЧАСТНИКА</button>`;
+                welcome.innerHTML = `👋 <b>${vkUser.first_name}</b>, твои данные подставлены!<br><button class="btn-qr" onclick="showQR('${checkData.verst_id}', '${checkData.full_name}')">МОЯ КАРТОЧКА УЧАСТНИКА</button>`;
             }
-            const dRes = await fetch(SCRIPT_URL + "?get_date=1");
-            const dData = await dRes.json();
-            document.getElementById('event_date').innerText = dData.date;
-            await loadQueue();
             validateForm();
         } catch (e) { console.error(e); }
     }
@@ -420,7 +439,7 @@
 
     async function saveTheme() {
         const text = document.getElementById('theme_input').value;
-        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: "set_theme", theme: text }) });
+        await fetch(getFullUrl(), { method: 'POST', body: JSON.stringify({ action: "set_theme", theme: text }) });
         alert("Тема сохранена!");
     }
 
@@ -468,23 +487,25 @@
         resultBox.innerHTML = '<div style="padding:15px">Ищем...</div>';
         resultBox.style.display = 'block';
         try {
-            const res = await fetch(`${SCRIPT_URL}?search=${encodeURIComponent(query)}`);
+            const res = await fetch(getFullUrl('search=' + encodeURIComponent(query)));
             const data = await res.json();
             resultBox.innerHTML = '';
-            (data.result?.data || []).forEach(v => {
-                const div = document.createElement('div');
-                div.style = "padding:12px; border-bottom:1px solid #f0f0f0; cursor:pointer;";
-                div.innerHTML = `<b>${v.full_name}</b><br><small>ID: ${v.id}</small>`;
-                div.onclick = async () => {
-                    if (isRecord) {
-                        selectedVolunteer = v;
-                        document.getElementById('verst_search').value = v.full_name;
-                        resultBox.style.display = 'none';
-                        validateForm();
-                    }
-                };
-                div.appendChild(div);
-            });
+            if (data.result && data.result.data) {
+                data.result.data.forEach(v => {
+                    const div = document.createElement('div');
+                    div.style = "padding:12px; border-bottom:1px solid #f0f0f0; cursor:pointer;";
+                    div.innerHTML = `<b>${v.full_name}</b><br><small>ID: ${v.id}</small>`;
+                    div.onclick = async () => {
+                        if (isRecord) {
+                            selectedVolunteer = v;
+                            document.getElementById('verst_search').value = v.full_name;
+                            resultBox.style.display = 'none';
+                            validateForm();
+                        }
+                    };
+                    resultBox.appendChild(div);
+                });
+            }
         } catch (e) { resultBox.innerHTML = 'Ошибка'; }
     }
 
@@ -533,7 +554,7 @@
             silent: document.getElementById('silent_mode').checked
         };
 
-        await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+        await fetch(getFullUrl(), { method: 'POST', body: JSON.stringify(payload) });
         location.reload();
     }
 
@@ -541,7 +562,7 @@
         const container = document.getElementById('rating_list');
         container.innerHTML = '<div style="padding:20px; text-align:center; color:#999;">Загрузка рейтинга...</div>';
         try {
-            const res = await fetch(`${SCRIPT_URL}?get_rating=1`);
+            const res = await fetch(getFullUrl('get_rating=1'));
             const data = await res.json();
             data.sort((a,b) => ((b.runs||0) + (b.vols||0)) - ((a.runs||0) + (a.vols||0)));
             container.innerHTML = '';
@@ -557,15 +578,20 @@
     }
 
     async function loadQueue() {
-        const res = await fetch(SCRIPT_URL);
+        // Мы уже получили данные в init, но можно вызвать отдельно если нужно обновить
+        const res = await fetch(getFullUrl());
         const data = await res.json();
+        renderQueue(data.queue);
+    }
+
+    function renderQueue(queue) {
         const container = document.getElementById('queue_container');
         container.innerHTML = '';
-        if(data.length === 0) {
+        if(!queue || queue.length === 0) {
             container.innerHTML = '<div style="text-align:center; color:#999; padding:20px;">Пока никто не записался</div>';
             return;
         }
-        data.reverse().forEach(item => {
+        [...queue].reverse().forEach(item => {
             const div = document.createElement('div');
             div.className = 'vol-card';
             const isMine = vkUser && (item.author_vk_id == vkUser.id || item.vk_id == vkUser.id);
@@ -582,7 +608,7 @@
 
     async function deleteMyRole(rid, rname, fname) {
         if (confirm(`Отменить запись ${fname}?`)) {
-            await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: "delete", vk_id: vkUser.id, role_id: rid, role_name: rname, person_name: fname }) });
+            await fetch(getFullUrl(), { method: 'POST', body: JSON.stringify({ action: "delete", vk_id: vkUser.id, role_id: rid, role_name: rname, person_name: fname }) });
             location.reload();
         }
     }
