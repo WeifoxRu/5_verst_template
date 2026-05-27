@@ -1,13 +1,43 @@
+/**
+ * УНИВЕРСАЛЬНЫЙ БЭКЕНД ЛОКАЦИИ (ШАБЛОН)
+ * Этот код клонируется для каждого парка.
+ * Все данные (токены, пароли) берутся динамически из Registry.
+ */
+
 const PROPS = PropertiesService.getScriptProperties();
 
+// ID твоей центральной базы Registry (DATABASE)
+const DATABASE_ID = "1zf4IhKNLsAwvp_PKcM3FRZ9C6vYvwtRhfRktMMcYjQM"; 
+
 /**
- * НАСТРОЙКИ (Теперь подтягиваются автоматически для каждой локации)
- * Эти поля заполняются Фабрикой при создании нового парка.
+ * ПОЛУЧЕНИЕ КОНФИГА ПАРКА
+ * Скрипт берет свой LOCATION_ID из свойств и ищет свои данные в Registry
  */
-const VK_TOKEN = PROPS.getProperty('VK_TOKEN'); 
-const EVENT_ID = PROPS.getProperty('EVENT_ID'); // ID парка (например, 10061)
-const CHAT_IDS = [PROPS.getProperty('PEER_ID')]; // ID чата (например, 2000000001)
-const PARK_NAME = PROPS.getProperty('PARK_NAME'); // Название локации
+function getMyConfig() {
+  const locId = PROPS.getProperty('LOCATION_ID'); // Устанавливается Фабрикой при создании
+  if (!locId) return null;
+
+  const db = SpreadsheetApp.openById(DATABASE_ID);
+  const sheet = db.getSheetByName("Registry");
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(locId).trim()) {
+      return {
+        location_id: data[i][0],
+        park_name: data[i][1],
+        event_id: data[i][2],
+        sheet_id: data[i][3],
+        vk_token: data[i][4],
+        nrms_user: data[i][5],
+        nrms_pass: data[i][6],
+        vk_app_id: data[i][7],
+        chat_id: data[i][8] || "2000000001"
+      };
+    }
+  }
+  return null;
+}
 
 // УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДАТЫ
 function getTargetDate(baseDate) {
@@ -24,9 +54,9 @@ function getTargetDate(baseDate) {
   return Utilities.formatDate(target, "GMT+3", "dd.MM.yyyy");
 }
 
-function getAuthToken() {
-  let user = PROPS.getProperty('NRMS_USER');
-  const pass = PROPS.getProperty('NRMS_PASS');
+function getAuthToken(config) {
+  let user = config.nrms_user;
+  const pass = config.nrms_pass;
   if (!user || !pass) return null;
   if (!user.toUpperCase().startsWith('A')) user = 'A' + user;
   const options = {
@@ -42,16 +72,18 @@ function getAuthToken() {
 
 // Функция для маппинга ролей перед отправкой в NRMS
 function mapRoleForNrms(roleId) {
-  // Если выбраны спец-позиции "Чай" (1001), "Вкусняшки" (1002) или "Вода" (1003)
-  // отправляем их как "Подготовка мероприятия" (8)
   if (roleId == 1001 || roleId == 1002 || roleId == 1003) return 8;
   if (roleId == 1004) return 10;
   return Number(roleId);
 }
 
 function syncToNrms(volunteersList) {
-  const token = getAuthToken();
+  const config = getMyConfig();
+  if (!config) return;
+  
+  const token = getAuthToken(config);
   if (!token) return;
+  
   const currentTarget = getTargetDate();
   let volunteers = volunteersList;
 
@@ -77,14 +109,18 @@ function syncToNrms(volunteersList) {
   UrlFetchApp.fetch("https://nrms.5verst.ru/api/v1/volunteer/event/save", {
     "method": "post", "contentType": "application/json",
     "headers": { "Authorization": "Bearer " + token },
-    "payload": JSON.stringify({ "event_id": EVENT_ID, "date": currentTarget, "upload_status_id": 1, "volunteers": volunteers }),
+    "payload": JSON.stringify({ "event_id": Number(config.event_id), "date": currentTarget, "upload_status_id": 1, "volunteers": volunteers }),
     "muteHttpExceptions": true
   });
 }
 
 function syncUserStats(vkId, verstId, forceName) {
-  const token = getAuthToken();
+  const config = getMyConfig();
+  if (!config) return null;
+  
+  const token = getAuthToken(config);
   if (!token) return null;
+  
   try {
     const res = UrlFetchApp.fetch("https://nrms.5verst.ru/api/v1/website/athlete/statById", {
       'method': 'post', 'contentType': 'application/json',
@@ -114,6 +150,9 @@ function syncUserStats(vkId, verstId, forceName) {
 }
 
 function doGet(e) {
+  const config = getMyConfig();
+  if (!config) return createJsonResponse({error: "Location configuration not found in Registry"});
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const qSheet = ss.getSheetByName("Queue");
   const sSheet = ss.getSheetByName("Stats");
@@ -136,15 +175,15 @@ function doGet(e) {
     return createJsonResponse({ found: false });
   }
 
-  if (e.parameter.get_date) return createJsonResponse({ date: currentTarget, park_name: PARK_NAME });
+  if (e.parameter.get_date) return createJsonResponse({ date: currentTarget, park_name: config.park_name });
 
   if (e.parameter.search) {
-    const token = getAuthToken();
+    const token = getAuthToken(config);
     const query = e.parameter.search.trim();
     const cleanId = query.replace(/^A/i, '');
     const isIdSearch = /^\d+$/.test(cleanId);
     const url = isIdSearch ? 'https://nrms.5verst.ru/api/v1/athlete/getListByIdPart' : 'https://nrms.5verst.ru/api/v1/athlete/getListByNamePart';
-    const payload = isIdSearch ? { "id": Number(cleanId) } : { "name": query.toUpperCase(), "event_id": EVENT_ID, "registered_only": false };
+    const payload = isIdSearch ? { "id": Number(cleanId) } : { "name": query.toUpperCase(), "event_id": Number(config.event_id), "registered_only": false };
     const res = UrlFetchApp.fetch(url, { 'method': 'post', 'contentType': 'application/json', 'payload': JSON.stringify(payload), 'headers': { 'Authorization': 'Bearer ' + token } });
     return ContentService.createTextOutput(res.getContentText()).setMimeType(ContentService.MimeType.JSON);
   }
@@ -163,6 +202,9 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  const config = getMyConfig();
+  if (!config) return createJsonResponse({success: false, error: "Config missing"});
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const qSheet = ss.getSheetByName("Queue");
   try {
@@ -172,18 +214,20 @@ function doPost(e) {
       console.log("IoT Command Received: " + data.command);
       return createJsonResponse({ 
         success: true, 
-        message: "Command sent to UNIT-" + EVENT_ID,
+        message: "Command sent to UNIT-" + config.event_id,
         device_response: "ACK" 
       });
     }
 
     const currentTarget = getTargetDate();
 
+    // Сохранение темы
     if (data.action === "set_theme") {
       PROPS.setProperty('EVENT_THEME', data.theme);
       return createJsonResponse({ success: true });
     }
 
+    // --- 1. УДАЛЕНИЕ ---
     if (data.action === "delete") {
       const qData = qSheet.getDataRange().getValues();
       let volunteersForNrms = [];
@@ -205,16 +249,18 @@ function doPost(e) {
       if (foundRow !== -1) {
         qSheet.deleteRow(foundRow);
         SpreadsheetApp.flush();
-        sendDeletionNotice(data.person_name || data.full_name || "Волонтер", data.role_name);
+        sendDeletionNotice(config, data.person_name || data.full_name || "Волонтер", data.role_name);
       }
       syncToNrms(volunteersForNrms);
       return createJsonResponse({ success: true });
     }
 
+    // --- 2. ВАЛИДАЦИЯ ДЛЯ ЗАПИСИ (МУЛЬТИ) ---
     if (!data.full_name || !data.roles || data.roles.length === 0) {
       return createJsonResponse({ success: false, error: "Missing name or roles" });
     }
 
+    // --- 3. ЗАПИСЬ (ЦИКЛ ПО РОЛЯМ) ---
     const qData = qSheet.getDataRange().getValues();
     let chatRoles = [];
 
@@ -243,7 +289,7 @@ function doPost(e) {
     syncUserStats(data.target_vk_id || data.author_vk_id, data.verst_id, data.full_name);
 
     if (!(data.silent === true || data.silent === "true")) {
-      sendRosterToChat({ 
+      sendRosterToChat(config, { 
         name: data.full_name, 
         role: chatRoles.join(", "), 
         is_update: false, 
@@ -265,19 +311,26 @@ function createJsonResponse(obj) {
 
 function getRandomId() { return Math.floor(Math.random() * 2147483647).toString(); }
 
-function sendDeletionNotice(name, role) {
+function sendDeletionNotice(config, name, role) {
   const msg = "❌ Отмена записи:\n" + name + " удалился(лась) с позиции " + role;
-  CHAT_IDS.forEach(id => {
-    if(id) UrlFetchApp.fetch("https://api.vk.com/method/messages.send", { 'method': 'post', 'payload': { 'access_token': VK_TOKEN, 'peer_id': id, 'message': msg, 'random_id': getRandomId(), 'v': '5.131' } });
-  });
+  const url = "https://api.vk.com/method/messages.send";
+  const payload = {
+    'access_token': config.vk_token,
+    'peer_id': config.chat_id,
+    'message': msg,
+    'random_id': getRandomId(),
+    'v': '5.131'
+  };
+  UrlFetchApp.fetch(url, { 'method': 'post', 'payload': payload, 'muteHttpExceptions': true });
 }
 
-function sendRosterToChat(lastEntry) {
+function sendRosterToChat(config, lastEntry) {
   const currentTarget = getTargetDate();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Queue");
   const data = sheet.getDataRange().getValues();
   const theme = PROPS.getProperty('EVENT_THEME') || "";
   
+  // Шаблон (количество слотов)
   const rosterTemplate = [
     { id: 1, label: "Организатор", count: 1 },
     { id: 35, label: "Разметка трассы", count: 1 },
@@ -307,6 +360,7 @@ function sendRosterToChat(lastEntry) {
   msg += "📅 Список волонтеров на " + currentTarget + "\n\n";
   
   let usedRows = new Set(); 
+  
   rosterTemplate.forEach(item => {
     let slotsFound = 0;
     for(let i = 1; i < data.length; i++) {
@@ -329,9 +383,15 @@ function sendRosterToChat(lastEntry) {
     }
   }
   if (extra) msg += "\n➕ Дополнительно:\n" + extra;
-  msg += "\n📝 Записаться: vk.com/app52805943"; // ID общего приложения или подставлять программно
+  msg += "\n📝 Записаться: vk.com/app" + config.vk_app_id;
   
-  CHAT_IDS.forEach(id => {
-    if(id) UrlFetchApp.fetch("https://api.vk.com/method/messages.send", { 'method': 'post', 'payload': { 'access_token': VK_TOKEN, 'peer_id': id, 'message': msg, 'random_id': getRandomId(), 'v': '5.131' } });
-  });
+  const url = "https://api.vk.com/method/messages.send";
+  const payload = {
+    'access_token': config.vk_token,
+    'peer_id': config.chat_id,
+    'message': msg,
+    'random_id': getRandomId(),
+    'v': '5.131'
+  };
+  UrlFetchApp.fetch(url, { 'method': 'post', 'payload': payload, 'muteHttpExceptions': true });
 }
